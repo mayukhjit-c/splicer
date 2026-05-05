@@ -68,14 +68,14 @@ export async function httpFetch<T = unknown>(url: string, options: HttpFetchOpti
     // Browser fallback with simple proxy mapping for known CORS hosts
     let proxyUrl = url;
     if (url.includes('surfaces-graphql.splice.com')) {
-      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      if (typeof window !== 'undefined' && ((window as any).location?.hostname === 'localhost' || (window as any).location?.hostname === '127.0.0.1')) {
         proxyUrl = url.replace('https://surfaces-graphql.splice.com/graphql', '/graphql');
       } else {
         proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
       }
     }
     if (url.includes('spliceproduction.s3.us-west-1.amazonaws.com')) {
-      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      if (typeof window !== 'undefined' && ((window as any).location?.hostname === 'localhost' || (window as any).location?.hostname === '127.0.0.1')) {
         const urlPath = url.substring(url.indexOf('/audio_samples'));
         proxyUrl = urlPath;
       } else {
