@@ -50,6 +50,9 @@ function SampleListEntryBase(
   const waOffsetRef = useRef<number>(0);
   const waDurationRef = useRef<number>(0);
   const waRafRef = useRef<number | null>(null);
+  const waLoopStartRef = useRef<number>(0);
+  const waLoopEndRef = useRef<number>(0);
+  const waPlaybackRateRef = useRef<number>(1);
 
   const { notify } = useToast();
   const [playbackRate, setPlaybackRate] = useState(1);
@@ -62,6 +65,29 @@ function SampleListEntryBase(
     if (input instanceof ArrayBuffer) return input;
     // Uint8Array#slice copies into a new ArrayBuffer
     return input.slice().buffer;
+  }
+
+  function stopWebAudioLoop(keepOffset = false) {
+    try {
+      if (waSourceRef.current) {
+        waSourceRef.current.onended = null as any;
+        try { waSourceRef.current.stop(); } catch {}
+        try { waSourceRef.current.disconnect(); } catch {}
+      }
+    } catch {}
+    waSourceRef.current = null;
+    if (!keepOffset) {
+      waOffsetRef.current = 0;
+    }
+    if (waRafRef.current != null) cancelAnimationFrame(waRafRef.current);
+    waRafRef.current = null;
+  }
+
+  function getWebAudioLoopOffset(now = audioCtxRef.current?.currentTime ?? 0) {
+    const loopDuration = Math.max(0.01, waLoopEndRef.current - waLoopStartRef.current);
+    const rate = waPlaybackRateRef.current || waSourceRef.current?.playbackRate.value || 1;
+    const elapsed = Math.max(0, (now - waStartTimeRef.current) * rate);
+    return (waOffsetRef.current + elapsed) % loopDuration;
   }
 
   function applyPlaybackSettings(rate: number, st: number) {
@@ -77,6 +103,7 @@ function SampleListEntryBase(
     }
     if (waSourceRef.current && waSourceRef.current.playbackRate) {
       waSourceRef.current.playbackRate.value = combinedRate;
+      waPlaybackRateRef.current = combinedRate;
     }
   }
 
@@ -193,37 +220,30 @@ function SampleListEntryBase(
   // Global stop-all listener to enforce exclusive playback across all rows
   useEffect(() => {
     const stopAllHandler = () => {
-      try {
-        if (audioRef.current) {
-          audioRef.current.pause();
-        }
-      } catch {}
-      setPlaying(false);
+      pausePlayback();
     };
     window.addEventListener('splicedd:stop-all', stopAllHandler as any);
     return () => window.removeEventListener('splicedd:stop-all', stopAllHandler as any);
   }, []);
 
   function stop() {
-    try {
-      if (waSourceRef.current) {
-        waSourceRef.current.onended = null as any;
-        try { waSourceRef.current.stop(); } catch {}
-        waSourceRef.current.disconnect();
-      }
-      waSourceRef.current = null;
-      if (waRafRef.current != null) cancelAnimationFrame(waRafRef.current);
-      waRafRef.current = null;
-    } catch {}
+    stopWebAudioLoop(false);
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
     }
+    waOffsetRef.current = 0;
     setPlaying(false);
     try { (ctx as any).setCurrentUuid?.(null); } catch {}
   }
 
   function pausePlayback() {
+    if (isLoop && audioCtxRef.current && waSourceRef.current) {
+      waOffsetRef.current = getWebAudioLoopOffset(audioCtxRef.current.currentTime);
+      stopWebAudioLoop(true);
+      setPlaying(false);
+      return;
+    }
     if (audioRef.current) {
       audioRef.current.pause();
     }
@@ -426,8 +446,7 @@ function SampleListEntryBase(
 
           // Clean previous source
           if (waSourceRef.current) {
-            try { waSourceRef.current.stop(); } catch {}
-            try { waSourceRef.current.disconnect(); } catch {}
+            stopWebAudioLoop(true);
           }
 
           const source = actx.createBufferSource();
@@ -435,21 +454,27 @@ function SampleListEntryBase(
           source.loop = true;
           source.loopStart = Math.max(0, Math.min(loopStart, audioBuffer.duration - 0.01));
           source.loopEnd = Math.max(source.loopStart + 0.01, Math.min(loopEnd, audioBuffer.duration));
-          source.playbackRate.value = playbackRate * Math.pow(2, semitones / 12);
+          const rate = playbackRate * Math.pow(2, semitones / 12);
+          source.playbackRate.value = rate;
           source.connect(actx.destination);
 
           waSourceRef.current = source;
-          waOffsetRef.current = 0;
+          waLoopStartRef.current = source.loopStart;
+          waLoopEndRef.current = source.loopEnd;
+          waPlaybackRateRef.current = rate;
+          const startOffset = waOffsetRef.current % Math.max(0.01, source.loopEnd - source.loopStart);
+          waOffsetRef.current = startOffset;
           waStartTimeRef.current = actx.currentTime;
-          source.start(0, source.loopStart);
+          source.start(0, source.loopStart + startOffset);
 
           // Drive currentTime updates for UI and waveform
           const tick = () => {
             const act = audioCtxRef.current;
             if (!act || !waSourceRef.current) return;
-            const t = ((act.currentTime - waStartTimeRef.current) + source.loopStart) % (source.loopEnd - source.loopStart);
+            const loopDuration = Math.max(0.01, waLoopEndRef.current - waLoopStartRef.current);
+            const t = waLoopStartRef.current + getWebAudioLoopOffset(act.currentTime);
             setCurrentTime(t);
-            setDuration(source.loopEnd - source.loopStart);
+            setDuration(loopDuration);
             waRafRef.current = requestAnimationFrame(tick);
           };
           if (waRafRef.current != null) cancelAnimationFrame(waRafRef.current);
@@ -952,18 +977,23 @@ function SampleListEntryBase(
                       loopEnd = Math.min(buf.duration, loopStart + loopDur);
                     }
 
-                    if (waSourceRef.current) { try { waSourceRef.current.stop(); } catch {} try { waSourceRef.current.disconnect(); } catch {} }
+                    if (waSourceRef.current) { stopWebAudioLoop(true); }
                     const src = actx.createBufferSource();
                     src.buffer = buf;
                     src.loop = true;
                     src.loopStart = Math.max(0, Math.min(loopStart, buf.duration - 0.01));
                     src.loopEnd = Math.max(src.loopStart + 0.01, Math.min(loopEnd, buf.duration));
-                    src.playbackRate.value = playbackRate * Math.pow(2, semitones / 12);
+                    const rate = playbackRate * Math.pow(2, semitones / 12);
+                    src.playbackRate.value = rate;
                     src.connect(actx.destination);
                     waSourceRef.current = src;
+                    waLoopStartRef.current = src.loopStart;
+                    waLoopEndRef.current = src.loopEnd;
+                    waPlaybackRateRef.current = rate;
                     waStartTimeRef.current = actx.currentTime;
-                    const offset = src.loopStart + (target % (src.loopEnd - src.loopStart));
-                    src.start(0, offset);
+                    const loopDuration = Math.max(0.01, src.loopEnd - src.loopStart);
+                    waOffsetRef.current = Math.max(0, target - src.loopStart) % loopDuration;
+                    src.start(0, src.loopStart + waOffsetRef.current);
                     setPlaying(true);
                     setErrorMessage(null);
                   } catch {}
@@ -995,6 +1025,8 @@ function SampleListEntryBase(
            style={{ cursor: "move" }}>
         {/* Download button */}
         <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             if ((window as any).__TAURI__) {
               // Desktop app: save to configured sampleDir
@@ -1047,11 +1079,11 @@ function SampleListEntryBase(
           </div>
           <div className="flex items-center gap-2">
             <span>Pitch</span>
-            <button aria-label="Pitch down" className="px-2 py-1 rounded border border-gray-700 hover:bg-white/5 active:bg-white/20 transition-colors" onClick={() => { const st = Math.max(-12, semitones - 1); setSemitones(st); applyPlaybackSettings(playbackRate, st); }}>-</button>
+            <button type="button" aria-label="Pitch down" className="px-2 py-1 rounded border border-gray-700 hover:bg-white/5 active:bg-white/20 transition-colors" onPointerDown={(e)=>e.stopPropagation()} onClick={() => { const st = Math.max(-12, semitones - 1); setSemitones(st); applyPlaybackSettings(playbackRate, st); }}>-</button>
             <span className="tabular-nums w-10 text-center">{semitones > 0 ? `+${semitones}` : semitones} st</span>
-            <button aria-label="Pitch up" className="px-2 py-1 rounded border border-gray-700 hover:bg-white/5 active:bg-white/20 transition-colors" onClick={() => { const st = Math.min(12, semitones + 1); setSemitones(st); applyPlaybackSettings(playbackRate, st); }}>+</button>
+            <button type="button" aria-label="Pitch up" className="px-2 py-1 rounded border border-gray-700 hover:bg-white/5 active:bg-white/20 transition-colors" onPointerDown={(e)=>e.stopPropagation()} onClick={() => { const st = Math.min(12, semitones + 1); setSemitones(st); applyPlaybackSettings(playbackRate, st); }}>+</button>
           </div>
-          <button className="px-2 py-1 rounded border border-gray-700 hover:bg-white/5 active:bg-white/20 transition-colors" onClick={() => { setPlaybackRate(1); setSemitones(0); applyPlaybackSettings(1, 0); }}>Reset</button>
+          <button type="button" className="px-2 py-1 rounded border border-gray-700 hover:bg-white/5 active:bg-white/20 transition-colors" onPointerDown={(e)=>e.stopPropagation()} onClick={() => { setPlaybackRate(1); setSemitones(0); applyPlaybackSettings(1, 0); }}>Reset</button>
         </div>
       </div>
     </div>

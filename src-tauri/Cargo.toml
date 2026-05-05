@@ -1,6 +1,6 @@
 [package]
 name = "splicedd"
-version = "1.1.1"
+version = "1.2.0"
 description = "A custom frontend for the Splice sample library"
 authors = ["Mayukhjit Chakraborty <https://github.com/mcinderelle>"]
 edition = "2021"

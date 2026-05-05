@@ -12,6 +12,7 @@ interface WaveformVisualizerProps {
 
 export default function WaveformVisualizer({ audioSrc = null, isPlaying, currentTime = 0, duration = 1, className = "", waveformDataOverride = null, onSeek }: WaveformVisualizerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const isScrubbingRef = useRef(false);
   const [waveformData, setWaveformData] = useState<number[]>([]);
   const waveformDataRef = useRef<Map<string, number[]>>(new Map());
   const RAF = useRef<number | null>(null);
@@ -237,21 +238,60 @@ export default function WaveformVisualizer({ audioSrc = null, isPlaying, current
     });
   }, [waveformData, animatedTime, duration]);
 
+  function seekFromClientX(clientX: number) {
+    if (!onSeek || !canvasRef.current || !duration || duration <= 0) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const ratio = Math.max(0, Math.min(1, x / Math.max(1, rect.width)));
+    onSeek(ratio * duration);
+  }
+
   return (
     <canvas
       ref={canvasRef}
       width={canvasWidth}
       height={40}
-      className={`h-7.5 w-full ${className}`}
+      className={`h-7.5 w-full ${onSeek ? 'cursor-ew-resize touch-none select-none' : ''} ${className}`}
+      style={{ touchAction: 'none' }}
+      onPointerDown={(e) => {
+        try {
+          if (!onSeek || e.button !== 0) return;
+          e.stopPropagation();
+          e.preventDefault();
+          isScrubbingRef.current = true;
+          canvasRef.current?.setPointerCapture(e.pointerId);
+          seekFromClientX(e.clientX);
+        } catch {}
+      }}
+      onPointerMove={(e) => {
+        try {
+          if (!isScrubbingRef.current) return;
+          e.preventDefault();
+          seekFromClientX(e.clientX);
+        } catch {}
+      }}
+      onPointerUp={(e) => {
+        try {
+          if (!isScrubbingRef.current) return;
+          e.preventDefault();
+          seekFromClientX(e.clientX);
+        } catch {}
+        isScrubbingRef.current = false;
+        try { canvasRef.current?.releasePointerCapture(e.pointerId); } catch {}
+      }}
+      onPointerCancel={() => {
+        isScrubbingRef.current = false;
+      }}
+      onPointerLeave={(e) => {
+        if (isScrubbingRef.current) {
+          seekFromClientX(e.clientX);
+        }
+      }}
       onClick={(e)=>{
         try {
+          if (isScrubbingRef.current) return;
           e.stopPropagation();
-          if (!onSeek || !canvasRef.current || !duration || duration <= 0) return;
-          const rect = canvasRef.current.getBoundingClientRect();
-          const x = e.clientX - rect.left;
-          const ratio = Math.max(0, Math.min(1, x / rect.width));
-          const target = ratio * duration;
-          onSeek(target);
+          seekFromClientX(e.clientX);
         } catch {}
       }}
     />
