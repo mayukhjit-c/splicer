@@ -850,7 +850,7 @@ function App() {
         : <div ref={resultContainer}
             className="card my-4 mb-16 overflow-y-auto overflow-x-hidden rounded-lg flex flex-col min-h-0 gap-0 animate-fadeIn flex-1 max-w-full transition-smooth"
         >
-              <div className="sticky top-0 z-10 bg-black/60 backdrop-blur supports-[backdrop-filter]:bg-black/40 border-b border-white/10 px-4 md:px-6 py-3 flex flex-wrap gap-3 justify-between items-center">
+              <div className="sticky top-0 z-10 bg-black border-b border-white/10 px-4 md:px-6 py-3 flex flex-wrap gap-3 justify-between items-center">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="space-y-1 min-w-0">
                     <h4 className="text-xl font-semibold truncate">Samples</h4>

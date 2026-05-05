@@ -26,9 +26,9 @@ export default function WaveformVisualizer({ audioSrc = null, isPlaying, current
     if (waveformDataOverride && waveformDataOverride.length) {
       try {
         const widthPx = canvasRef.current?.clientWidth || 520;
-        const maxBarsByWidth = Math.max(60, Math.floor(widthPx / 3));
+        const maxBarsByWidth = Math.max(20, Math.floor(widthPx / 3));
         const barsPerSecond = 30;
-        const targetSamples = Math.max(80, Math.min(maxBarsByWidth, Math.round(Math.max(0.001, duration) * barsPerSecond)));
+        const targetSamples = Math.max(20, Math.min(maxBarsByWidth, Math.round(Math.max(0.001, duration) * barsPerSecond)));
         const src = waveformDataOverride;
         if (targetSamples === src.length) {
           setWaveformData(src);
@@ -73,10 +73,10 @@ export default function WaveformVisualizer({ audioSrc = null, isPlaying, current
         const channelData = audioBuffer.getChannelData(0);
         // Choose number of bars proportional to duration, capped by available width
         const widthPx = canvasRef.current?.clientWidth || 520;
-        const maxBarsByWidth = Math.max(60, Math.floor(widthPx / 3)); // assume ~2px bar + 1px gap
+        const maxBarsByWidth = Math.max(20, Math.floor(widthPx / 3)); // assume ~2px bar + 1px gap
         const barsPerSecond = 30; // density: higher value = more detail for longer clips
         const durationSec = Math.max(0.001, audioBuffer.duration);
-        const samples = Math.max(80, Math.min(maxBarsByWidth, Math.round(durationSec * barsPerSecond)));
+        const samples = Math.max(20, Math.min(maxBarsByWidth, Math.round(durationSec * barsPerSecond)));
         const blockSize = Math.max(1, Math.floor(channelData.length / samples));
         const waveform: number[] = [];
 
@@ -188,10 +188,10 @@ export default function WaveformVisualizer({ audioSrc = null, isPlaying, current
     ctx.clearRect(0, 0, width, height);
     
     const barCount = waveformData.length;
-    // Scale bar width and gap so bars fit exactly within width
     const desiredBars = Math.max(1, waveformData.length);
-    const gap = 1;
-    let barWidth = Math.max(2, Math.floor((width - (desiredBars - 1) * gap) / desiredBars));
+    const gap = width > 400 ? 2 : 1;
+    // Calculate bar width proportionally so it exactly fits the canvas width
+    let barWidth = Math.max(1, (width - (desiredBars - 1) * gap) / desiredBars);
     const totalBarWidth = barWidth + gap;
     const maxBarHeight = height * 0.75; // Use 75% of height for bars
     const centerY = height / 2;
@@ -203,7 +203,7 @@ export default function WaveformVisualizer({ audioSrc = null, isPlaying, current
     const progress = Math.max(0, Math.min(1, animatedTime / duration)) * barCount;
     const currentBarIndex = Math.floor(progress);
 
-    // Compute leftover pixels and add to last bar to ensure full width coverage
+    // Compute leftover pixels, not needed for precise floats but keeping it safe
     const usedWidth = desiredBars * barWidth + (desiredBars - 1) * gap;
     const leftover = Math.max(0, width - usedWidth);
 
@@ -214,7 +214,7 @@ export default function WaveformVisualizer({ audioSrc = null, isPlaying, current
       
       // Position bars from left to right
       const x = i * totalBarWidth;
-      const w = i === desiredBars - 1 ? barWidth + leftover : barWidth;
+      const w = Math.max(1, i === desiredBars - 1 ? barWidth + leftover : barWidth);
       
       // Determine if this bar has been played
       const hasBeenPlayed = i < currentBarIndex;

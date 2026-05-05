@@ -688,7 +688,7 @@ function SampleListEntryBase(
       onMouseLeave={onMouseLeave}
       className={`card-subtle flex w-full ${compact ? 'px-3 md:px-4 py-1.5 md:py-2.5 gap-3 md:gap-4' : 'px-4 md:px-6 py-2.5 md:py-3.5 gap-4 md:gap-6'} rounded-lg ${compact ? 'min-h-[88px]' : 'min-h-[128px]'} flex-wrap md:flex-nowrap
                     items-center cursor-pointer select-none transition-all duration-300 group
-                    ${playing ? 'ring-2 ring-emerald-400 bg-white/5 shadow-[0_0_36px_-6px_rgba(16,185,129,0.55)] backdrop-blur-sm' : ''}
+                    ${playing ? 'ring-2 ring-emerald-400 bg-white/5 shadow-[0_0_36px_-6px_rgba(16,185,129,0.55)]' : ''}
                     ${!playing && isSelected ? 'ring-2 ring-sky-400/70 bg-white/5 shadow-[0_0_32px_-10px_rgba(56,189,248,0.6)]' : ''}
                     ${!playing ? 'hover:bg-white/5 hover:shadow-[0_0_30px_-12px_rgba(255,255,255,0.25)]' : ''}`}
          data-sample-uuid={sample.uuid}
@@ -727,7 +727,7 @@ function SampleListEntryBase(
         <div className={`flex items-center ${compact ? 'gap-1.5 w-24 md:w-28' : 'gap-2 w-28 md:w-32'} justify-start`}>
           <button onClick={handlePlayClick}
                className={`play-button cursor-pointer w-10 h-10 md:w-12 md:h-12 rounded-full border flex items-center justify-center 
-                          transition-all duration-300 backdrop-blur-sm focus:outline-none focus:ring-2
+                          transition-all duration-300 focus:outline-none focus:ring-2
                           ${playing ? 'border-emerald-400/50 bg-emerald-300/10 focus:ring-emerald-400/40' : 'border-white/30 bg-white/5 hover:bg-white/10 focus:ring-white/40'}`}
                aria-label={playing ? "Pause sample" : "Play sample"}>
             {fgLoading ? (
@@ -741,7 +741,7 @@ function SampleListEntryBase(
           {playing && (
             <button onClick={(e)=>{ e.stopPropagation(); stop(); }}
                  className={`cursor-pointer w-10 h-10 md:w-12 md:h-12 rounded-full border flex items-center justify-center 
-                            transition-all duration-300 backdrop-blur-sm focus:outline-none focus:ring-2
+                            transition-all duration-300 focus:outline-none focus:ring-2
                             ${'border-rose-400/50 bg-rose-300/10 hover:bg-rose-300/20 focus:ring-rose-400/40'}`}
                  aria-label="Stop sample">
               <StopIcon className="w-5 h-5 text-white" />
@@ -795,7 +795,7 @@ function SampleListEntryBase(
             <button
               onClick={toggleFavorite}
               aria-label={isFav ? 'Unfavorite' : 'Favorite'}
-              className={`p-1.5 rounded-lg border transition-all duration-300 backdrop-blur-md ${isFav ? 'border-pink-400/60 bg-pink-500/20 shadow-[0_8px_24px_-8px_rgba(236,72,153,0.6)] scale-[1.05]' : 'border-gray-700/80 bg-white/5 hover:bg-white/10'}`}
+              className={`p-1.5 rounded-lg border transition-all duration-300 ${isFav ? 'border-pink-400/60 bg-pink-500/20 shadow-[0_8px_24px_-8px_rgba(236,72,153,0.6)] scale-[1.05]' : 'border-gray-700/80 bg-black/40 hover:bg-white/10'}`}
               data-draggable="false"
             >
               <HeartIcon className={`w-4 h-4 ${isFav ? 'text-pink-300 drop-shadow-[0_0_6px_rgba(236,72,153,0.75)]' : 'text-gray-300'}`} />
@@ -868,6 +868,22 @@ function SampleListEntryBase(
           </Chip>
         ))}</div>
       </div>
+
+    function applyPlaybackSettings(rate: number, st: number) {
+      const combinedRate = rate * Math.pow(2, st / 12);
+      if (audioRef.current) {
+        try {
+          const pitching = st !== 0;
+          (audioRef.current as any).preservesPitch = pitching ? false : cfg().preservePitch;
+          (audioRef.current as any).mozPreservesPitch = pitching ? false : cfg().preservePitch;
+          (audioRef.current as any).webkitPreservesPitch = pitching ? false : cfg().preservePitch;
+        } catch {}
+        audioRef.current.playbackRate = combinedRate;
+      }
+      if (waSourceRef.current && waSourceRef.current.playbackRate) {
+        waSourceRef.current.playbackRate.value = combinedRate;
+      }
+    }
 
       { /* flexible waveform - expands to consume free space */}
       <div className="flex items-center px-2 flex-1 min-w-[240px]" onMouseDown={handleDrag}
@@ -1021,7 +1037,7 @@ function SampleListEntryBase(
         <div className="flex items-center gap-2 ml-2 text-[11px] text-gray-400" onClick={(e)=>e.stopPropagation()}>
           <div className="flex items-center gap-2">
             <span>Speed</span>
-            <input aria-label="Speed" className="slider-white" type="range" min={0.5} max={2} step={0.05} value={playbackRate} onChange={(e)=>{ const v = parseFloat((e.target as HTMLInputElement).value); setPlaybackRate(v); if(audioRef.current) audioRef.current.playbackRate = v * Math.pow(2, semitones/12); }} />
+            <input aria-label="Speed" className="slider-white" type="range" min={0.5} max={2} step={0.05} value={playbackRate} onChange={(e)=>{ const v = parseFloat((e.target as HTMLInputElement).value); setPlaybackRate(v); applyPlaybackSettings(v, semitones); }} />
             <span className="tabular-nums">{playbackRate.toFixed(2)}x</span>
             {sample.bpm != null && (
               <span className="tabular-nums text-sky-300 bg-sky-500/10 rounded px-2 py-0.5 border border-sky-400/30 shadow-[0_0_12px_rgba(56,189,248,0.35)]">
@@ -1031,11 +1047,11 @@ function SampleListEntryBase(
           </div>
           <div className="flex items-center gap-2">
             <span>Pitch</span>
-            <button aria-label="Pitch down" className="px-2 py-1 rounded border border-gray-700 hover:bg-white/5" onClick={() => { const st = Math.max(-12, semitones - 1); setSemitones(st); if(audioRef.current){ try{ (audioRef.current as any).preservesPitch = st !== 0 ? false : cfg().preservePitch; (audioRef.current as any).mozPreservesPitch = st !== 0 ? false : cfg().preservePitch; (audioRef.current as any).webkitPreservesPitch = st !== 0 ? false : cfg().preservePitch; } catch{} audioRef.current.playbackRate = playbackRate * Math.pow(2, st/12); } }}>-</button>
+            <button aria-label="Pitch down" className="px-2 py-1 rounded border border-gray-700 hover:bg-white/5 active:bg-white/20 transition-colors" onClick={() => { const st = Math.max(-12, semitones - 1); setSemitones(st); applyPlaybackSettings(playbackRate, st); }}>-</button>
             <span className="tabular-nums w-10 text-center">{semitones > 0 ? `+${semitones}` : semitones} st</span>
-            <button aria-label="Pitch up" className="px-2 py-1 rounded border border-gray-700 hover:bg-white/5" onClick={() => { const st = Math.min(12, semitones + 1); setSemitones(st); if(audioRef.current){ try{ (audioRef.current as any).preservesPitch = st !== 0 ? false : cfg().preservePitch; (audioRef.current as any).mozPreservesPitch = st !== 0 ? false : cfg().preservePitch; (audioRef.current as any).webkitPreservesPitch = st !== 0 ? false : cfg().preservePitch; } catch{} audioRef.current.playbackRate = playbackRate * Math.pow(2, st/12); } }}>+</button>
+            <button aria-label="Pitch up" className="px-2 py-1 rounded border border-gray-700 hover:bg-white/5 active:bg-white/20 transition-colors" onClick={() => { const st = Math.min(12, semitones + 1); setSemitones(st); applyPlaybackSettings(playbackRate, st); }}>+</button>
           </div>
-          <button className="px-2 py-1 rounded border border-gray-700 hover:bg-white/5" onClick={() => { setPlaybackRate(1); setSemitones(0); if(audioRef.current){ try{ (audioRef.current as any).preservesPitch = cfg().preservePitch; (audioRef.current as any).mozPreservesPitch = cfg().preservePitch; (audioRef.current as any).webkitPreservesPitch = cfg().preservePitch; } catch{} audioRef.current.playbackRate = 1; } }}>Reset</button>
+          <button className="px-2 py-1 rounded border border-gray-700 hover:bg-white/5 active:bg-white/20 transition-colors" onClick={() => { setPlaybackRate(1); setSemitones(0); applyPlaybackSettings(1, 0); }}>Reset</button>
         </div>
       </div>
     </div>
