@@ -64,6 +64,22 @@ function SampleListEntryBase(
     return input.slice().buffer;
   }
 
+  function applyPlaybackSettings(rate: number, st: number) {
+    const combinedRate = rate * Math.pow(2, st / 12);
+    if (audioRef.current) {
+      try {
+        const pitching = st !== 0;
+        (audioRef.current as any).preservesPitch = pitching ? false : cfg().preservePitch;
+        (audioRef.current as any).mozPreservesPitch = pitching ? false : cfg().preservePitch;
+        (audioRef.current as any).webkitPreservesPitch = pitching ? false : cfg().preservePitch;
+      } catch {}
+      audioRef.current.playbackRate = combinedRate;
+    }
+    if (waSourceRef.current && waSourceRef.current.playbackRate) {
+      waSourceRef.current.playbackRate.value = combinedRate;
+    }
+  }
+
   const pack = sample.parents?.items?.[0] ?? { name: 'Unknown pack', permalink_base_url: '', files: [] } as any;
   const packCover = (pack.files?.find((x: any) => x.asset_file_type_slug == "cover_image")?.url) || "img/missing-cover.png";
   const isLoop = sample.asset_category_slug === 'loop';
@@ -868,22 +884,6 @@ function SampleListEntryBase(
           </Chip>
         ))}</div>
       </div>
-
-    function applyPlaybackSettings(rate: number, st: number) {
-      const combinedRate = rate * Math.pow(2, st / 12);
-      if (audioRef.current) {
-        try {
-          const pitching = st !== 0;
-          (audioRef.current as any).preservesPitch = pitching ? false : cfg().preservePitch;
-          (audioRef.current as any).mozPreservesPitch = pitching ? false : cfg().preservePitch;
-          (audioRef.current as any).webkitPreservesPitch = pitching ? false : cfg().preservePitch;
-        } catch {}
-        audioRef.current.playbackRate = combinedRate;
-      }
-      if (waSourceRef.current && waSourceRef.current.playbackRate) {
-        waSourceRef.current.playbackRate.value = combinedRate;
-      }
-    }
 
       { /* flexible waveform - expands to consume free space */}
       <div className="flex items-center px-2 flex-1 min-w-[240px]" onMouseDown={handleDrag}
